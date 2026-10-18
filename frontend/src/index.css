@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+/* Color tokens. Components use the Tailwind names below (bg-bench, text-ink...). */
+:root {
+  --bench: #eef1f4; /* page background */
+  --panel: #ffffff; /* surfaces */
+  --sunken: #f6f8fa; /* table headers, code blocks */
+  --line: #d5dce2; /* borders and grid */
+  --ink: #1e2a33; /* main text */
+  --muted: #5b6b78; /* secondary text */
+  --ok: #0f7f7a; /* successful spans */
+  --ok-soft: #d6efec;
+  --fault: #c8372d; /* errors */
+  --fault-soft: #f9dfdc;
+  --warn: #9a5b00; /* incomplete traces */
+  --warn-soft: #fbecd2;
+  --cursor: #e0a100; /* replay playhead */
+  --cursor-soft: #fdf3d3;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bench: #151b20;
+    --panel: #1c242b;
+    --sunken: #222c34;
+    --line: #33404b;
+    --ink: #e3e9ee;
+    --muted: #94a3af;
+    --ok: #3fb8ad;
+    --ok-soft: #173a38;
+    --fault: #f0695f;
+    --fault-soft: #45201d;
+    --warn: #e2a64a;
+    --warn-soft: #3d2d12;
+    --cursor: #f2b705;
+    --cursor-soft: #3b3112;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-bench: var(--bench);
+  --color-panel: var(--panel);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-fault: var(--fault);
+  --color-fault-soft: var(--fault-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-cursor: var(--cursor);
+  --color-cursor-soft: var(--cursor-soft);
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+body {
+  background: var(--bench);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cursor);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}
