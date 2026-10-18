@@ -13,7 +13,7 @@ What this file does NOT check (done later, at run level, in services/):
 """
 
 import re
-from enum import Enum
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import (
@@ -40,14 +40,14 @@ MAX_STACK_FRAMES = 50
 _ABSOLUTE_PATH = re.compile(r"^([A-Za-z]:|[\\/])")
 
 
-class EventType(str, Enum):
+class EventType(StrEnum):
     RUN_STARTED = "run.started"
     SPAN = "span"
     EXCEPTION = "exception"
     RUN_FINISHED = "run.finished"
 
 
-class EventStatus(str, Enum):
+class EventStatus(StrEnum):
     OK = "ok"
     ERROR = "error"
 
