@@ -1,0 +1,5 @@
+order_id,customer,country,unit_price,quantity,discount_code
+A-100,Linh,vn,250.00,2,
+A-101,Minh,vn,1200.00,1,STUDENT
+A-104,Bao,vn,40.00,5,BLACKFRIDAY
+A-103,Wei,sg,15.50,10,

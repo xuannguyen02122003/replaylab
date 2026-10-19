@@ -1,0 +1,22 @@
+# Runs the whole app:  docker compose up --build   then open http://localhost:8080
+services:
+  backend:
+    build: ./backend
+    environment:
+      REPLAYLAB_DATABASE_URL: sqlite:////data/replaylab.db
+      REPLAYLAB_ENABLE_SCENARIO_RUNNER: "true"
+    volumes:
+      - replaylab-data:/data   # keeps recorded runs when containers are recreated
+    ports:
+      - "8000:8000"            # optional: lets the CLI demo runner send events from your machine
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  replaylab-data:

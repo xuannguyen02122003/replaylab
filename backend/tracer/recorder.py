@@ -41,7 +41,8 @@ import traceback
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, TypeVar
@@ -161,6 +162,8 @@ class Recorder:
         self.project_root = (project_root or DEFAULT_PROJECT_ROOT).resolve()
         self.events: list[dict[str, Any]] = []
         self.run_event_id = str(uuid.uuid4())
+        # Extra facts added to run.finished (for example, how many spans were dropped).
+        self.finish_attributes: dict[str, Any] = {}
         self._next_sequence = 0
         self._lock = threading.Lock()
 
@@ -303,8 +306,57 @@ def run(
             timestamp=started_at,
             status=status,
             duration_ms=round((time.perf_counter() - started) * 1000, 3),
-            attributes=finish_attributes,
+            attributes={**recorder.finish_attributes, **finish_attributes},
         )
+
+
+@dataclass
+class SpanHandle:
+    """What start_span() returns and end_span() needs to close the span."""
+
+    recorder: Recorder
+    span: Span
+    token: Token[Span | None]
+
+
+def start_span(name: str, attributes: dict[str, Any] | None = None) -> SpanHandle | None:
+    """Open a span and make it the current span. Returns None outside a run.
+
+    Most code should use span() or @traced. These two low-level functions
+    exist for the automatic tracer (auto.py), which opens and closes spans
+    from monitoring callbacks instead of a `with` block.
+    """
+    recorder = _current_recorder.get()
+    if recorder is None:
+        return None
+    parent = _current_span.get()
+    current = Span(
+        name=sanitize_operation_name(name),
+        sequence=recorder.take_sequence(),
+        parent_id=parent.event_id if parent else None,
+        attributes=attributes or {},
+    )
+    return SpanHandle(recorder, current, _current_span.set(current))
+
+
+def end_span(handle: SpanHandle, exc: BaseException | None = None) -> None:
+    """Close a span opened by start_span(). Pass the exception if it failed."""
+    current = handle.span
+    if exc is not None:
+        current.status = EventStatus.ERROR
+        handle.recorder.record_exception(exc, current)
+    _current_span.reset(handle.token)
+    handle.recorder.emit(
+        event_type=EventType.SPAN,
+        event_id=current.event_id,
+        sequence=current.sequence,
+        operation_name=current.name,
+        timestamp=current.timestamp,
+        status=current.status,
+        parent_event_id=current.parent_id,
+        duration_ms=current.elapsed_ms(),
+        attributes=current.attributes,
+    )
 
 
 @contextmanager
@@ -314,38 +366,17 @@ def span(name: str, **attributes: Any) -> Iterator[Span | None]:
     Outside a run this does nothing, so instrumented code still works
     when nobody is recording.
     """
-    recorder = _current_recorder.get()
-    if recorder is None:
+    handle = start_span(name, attributes)
+    if handle is None:
         yield None
         return
-
-    parent = _current_span.get()
-    current = Span(
-        name=sanitize_operation_name(name),
-        sequence=recorder.take_sequence(),
-        parent_id=parent.event_id if parent else None,
-        attributes=attributes,
-    )
-    token = _current_span.set(current)
     try:
-        yield current
+        yield handle.span
     except BaseException as exc:
-        current.status = EventStatus.ERROR
-        recorder.record_exception(exc, current)
+        end_span(handle, exc)
         raise
-    finally:
-        _current_span.reset(token)
-        recorder.emit(
-            event_type=EventType.SPAN,
-            event_id=current.event_id,
-            sequence=current.sequence,
-            operation_name=current.name,
-            timestamp=current.timestamp,
-            status=current.status,
-            parent_event_id=current.parent_id,
-            duration_ms=current.elapsed_ms(),
-            attributes=current.attributes,
-        )
+    else:
+        end_span(handle)
 
 
 def traced(name: str | Callable[..., Any] | None = None) -> Any:

@@ -1,6 +1,6 @@
 # ReplayLab Event Schema
 
-Status: **Draft v1.0** (not yet implemented in code)
+Status: **v1.0**, implemented in `backend/app/schemas/event.py` (validation) and `backend/tracer/` (producer).
 
 This document defines the contract between the instrumented Python application (the *producer*) and the ReplayLab collector (the *consumer*). The backend Pydantic schemas and the frontend TypeScript types must both match this document. If they disagree, this document is the source of truth until it is deliberately changed.
 
@@ -69,7 +69,7 @@ A span that fails has `status: "error"`. The details of the failure (type, messa
 |-------|-------|
 | `type` | Exception class name, 1–200 characters |
 | `message` | 0–1000 characters, sanitized (section 5) |
-| `stack` | 0–50 frames, innermost frame first. `file` is a path relative to the project root, never an absolute path from the developer's machine |
+| `stack` | 0–50 frames, innermost frame first. `file` is a path relative to the project root, never an absolute path from the developer's machine. The tracer keeps only frames from project files (no standard library, packages or tracer internals) |
 
 ---
 
@@ -87,6 +87,14 @@ Sanitization (applied by the instrumentation **before** sending, and checked aga
 - Keys matching `password`, `secret`, `token`, `api_key`, `authorization`, `card` (case-insensitive substring match) have their value replaced with `"[REDACTED]"`
 - Strings longer than the limit are truncated and end with `…[truncated]`
 - Local variables are **never** captured automatically. Only values the developer passes on purpose are recorded
+
+What the tracer does with values that do not fit (so nothing is lost silently):
+- Unsupported types (lists, objects…) are converted to their text form, then truncated
+- `NaN` and infinity become strings
+- Invalid key characters are replaced with `_`
+- With more than 20 keys, the first 19 are kept and `replaylab.dropped_attributes` records how many were dropped
+
+The collector does **not** repair data. Anything outside the limits is rejected with HTTP 422.
 
 ---
 
@@ -216,15 +224,31 @@ A finished run whose code raised an exception is still `complete` (the trace is 
 
 ---
 
-## 9. Out of scope for v1.0
+## 9. Ingestion rules (collector)
+
+Events are sent with `POST /api/runs/{run_id}/events` and body `{"events": [...]}` (1–1000 events).
+
+| Situation | Result |
+|-----------|--------|
+| Any event fails validation | `422`, nothing from the batch is stored |
+| An event's `run_id` differs from the URL | `422` (`invalid_trace`) |
+| Exactly the same event is sent again | Skipped and counted as a duplicate (safe retry) |
+| Same `event_id` with different content, or an `event_id` from another run | `409` (`conflict`) |
+| A `sequence` already used by a different event in the run | `409` (`conflict`) |
+| Valid batch | `201`, and the run summary is recomputed from **all** stored events |
+
+A run can be sent in several batches. It stays `incomplete` until the checks in section 7 pass.
+
+## 10. Out of scope for v1.0
 
 - Nested attribute values (objects, arrays)
 - Events for operations that started but never finished (a crash mid-operation shows up as a missing `run.finished`, which makes the run `incomplete`)
 - Multiple threads or async tasks running in parallel within one run
 - Capturing local variables or function arguments automatically
 
-## 10. Change log
+## 11. Change log
 
 | Version | Date | Change |
 |---------|------|--------|
 | 1.0 (draft) | 2026-10-11 | Initial draft |
+| 1.0 | 2026-10-16 | Implemented. Added tracer value handling and ingestion rules |

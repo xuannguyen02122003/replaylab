@@ -40,3 +40,21 @@ def send_events(
         raise ExportError(f"collector rejected the events (HTTP {exc.code}): {detail}") from exc
     except urllib.error.URLError as exc:
         raise ExportError(f"could not reach the collector at {url}: {exc.reason}") from exc
+
+
+def send_in_chunks(
+    events: list[dict[str, Any]],
+    collector_url: str,
+    chunk_size: int = 1000,
+    timeout_seconds: float = 30.0,
+) -> dict[str, Any]:
+    """Send a large run as several batches (the collector accepts up to 1000 per request).
+
+    Events are sent in sequence order, so the run becomes complete with the last batch.
+    Returns the collector's reply to the last batch.
+    """
+    ordered = sorted(events, key=lambda e: e["sequence"])
+    reply: dict[str, Any] = {}
+    for start in range(0, len(ordered), chunk_size):
+        reply = send_events(ordered[start : start + chunk_size], collector_url, timeout_seconds)
+    return reply

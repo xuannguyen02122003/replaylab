@@ -6,40 +6,10 @@ the API. It is the closest test to how the project is really used.
 """
 
 import json
-import socket
-import threading
-import time
 import urllib.request
 
-import pytest
-import uvicorn
-
-from app.main import create_app
 from examples.run_scenarios import main as run_scenarios_main
-from tests.conftest import make_settings
-
-
-def free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-@pytest.fixture
-def server_url():
-    port = free_port()
-    app = create_app(make_settings())
-    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
-    thread = threading.Thread(target=server.run, daemon=True)
-    thread.start()
-    deadline = time.time() + 10
-    while not server.started:
-        if time.time() > deadline:
-            raise RuntimeError("server did not start")
-        time.sleep(0.05)
-    yield f"http://127.0.0.1:{port}"
-    server.should_exit = True
-    thread.join(timeout=5)
+from tests.conftest import free_port
 
 
 def get_json(url):
